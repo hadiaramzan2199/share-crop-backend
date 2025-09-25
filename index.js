@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+// Updated for Neon database connection
 const cors = require('cors');
 const usersRoutes = require('./routes/users');
 const farmsRoutes = require('./routes/farms');
