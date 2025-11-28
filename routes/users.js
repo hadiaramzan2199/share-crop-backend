@@ -32,16 +32,19 @@ router.get('/:id', async (req, res) => {
 router.get('/email/:email', async (req, res) => {
   try {
     const { email } = req.params;
-    console.log('Received request for user by email:', email); // Add logging
+    console.log('Received request for user by email:', email);
+
     const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    console.log('Query result:', user.rows);
+
     if (user.rows.length === 0) {
-      console.log('User not found for email:', email); // Add logging
+      console.log('User not found for email:', email);
       return res.status(404).json('User not found');
     }
-    console.log('User found for email:', email, user.rows[0]); // Add logging
+
     res.json(user.rows[0]);
   } catch (err) {
-    console.error('Error in GET /email/:email:', err.message); // Add logging
+    console.error('Error in GET /email/:email:', err);  // Log the full error object
     res.status(500).send('Server Error');
   }
 });
