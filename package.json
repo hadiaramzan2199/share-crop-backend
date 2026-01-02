@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js"
+    "start": "node index.js",
+    "seed:dashboard": "node scripts/seed_dashboard_data.js",
+    "migrate:complaints:category": "node runComplaintsAddCategory.js"
   },
   "keywords": [],
   "author": "",
