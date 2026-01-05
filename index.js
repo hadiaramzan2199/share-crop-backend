@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth'); // Import auth routes
 const notificationsRoutes = require('./routes/notifications'); // Import notifications routes
 const ordersRoutes = require('./routes/orders'); // Import orders routes
 const coinsRoutes = require('./routes/coins'); // Import coins routes
+const complaintsRoutes = require('./routes/complaints'); // Import complaints routes
 const adminRouter = require('./src/modules/admin/routes/admin.routes');
 const attachUser = require('./src/middleware/auth/attachUser');
 const pool = require('./db');
@@ -54,6 +55,7 @@ app.use('/api/auth', authRoutes); // Use auth routes
 app.use('/api/notifications', notificationsRoutes); // Use notifications routes
 app.use('/api/orders', ordersRoutes); // Use orders routes
 app.use('/api/coins', coinsRoutes); // Use coins routes
+app.use('/api/complaints', complaintsRoutes); // Use complaints routes
 app.use('/api/admin', adminRouter);
 
 // Database health check endpoint
