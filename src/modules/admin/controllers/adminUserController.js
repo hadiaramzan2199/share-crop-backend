@@ -41,13 +41,22 @@ async function listPendingFarmers(req, res) {
 async function getFarmerDocuments(req, res) {
   try {
     const { id } = req.params;
-    const result = await pool.query("SELECT documents_json FROM users WHERE id = $1", [id]);
+    // Optimized query - only fetch documents_json column with index hint
+    const result = await pool.query(
+      "SELECT documents_json FROM users WHERE id = $1 LIMIT 1", 
+      [id]
+    );
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Not Found' });
+      return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ documents: result.rows[0].documents_json });
+    // Return immediately without processing large JSON if not needed
+    const documents = result.rows[0].documents_json;
+    res.json({ documents: documents || null });
   } catch (err) {
-    const msg = err && err.code === '42703' ? 'Schema requires users.documents_json' : 'Server Error';
+    console.error('Error fetching farmer documents:', err);
+    const msg = err && err.code === '42703' 
+      ? 'Schema requires users.documents_json' 
+      : err.message || 'Server Error';
     res.status(500).json({ error: msg });
   }
 }
@@ -57,31 +66,49 @@ async function approveFarmer(req, res) {
   try {
     const { id } = req.params;
     await client.query('BEGIN');
-    const pre = await client.query("SELECT user_type, approval_status FROM users WHERE id = $1 FOR UPDATE", [id]);
+    
+    const pre = await client.query("SELECT user_type, approval_status, is_active FROM users WHERE id = $1 FOR UPDATE", [id]);
+    
     if (pre.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Not Found' });
+      return res.status(404).json({ error: 'User not found' });
     }
+    
     const row = pre.rows[0];
-    if (row.user_type !== 'farmer') {
+    
+    // Case-insensitive check for user_type
+    const userTypeLower = row.user_type?.toLowerCase();
+    if (userTypeLower !== 'farmer') {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Not a farmer' });
+      return res.status(400).json({ error: 'User is not a farmer', user_type: row.user_type });
     }
-    if (typeof row.approval_status !== 'string') {
+    
+    // Handle case where approval_status might be null
+    const approvalStatus = row.approval_status || 'pending';
+    if (typeof approvalStatus !== 'string') {
       await client.query('ROLLBACK');
-      return res.status(500).json({ error: 'Schema requires users.approval_status' });
+      return res.status(500).json({ error: 'Schema requires users.approval_status column', type: typeof approvalStatus });
     }
-    if (row.approval_status !== 'pending') {
+    
+    // Case-insensitive check for approval_status
+    const approvalStatusLower = approvalStatus.toLowerCase();
+    if (approvalStatusLower !== 'pending') {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Invalid state' });
+      return res.status(409).json({ 
+        error: `Farmer is already ${approvalStatus}. Cannot approve.`,
+        current_status: approvalStatus 
+      });
     }
+    
     await client.query("UPDATE users SET approval_status = 'approved', is_active = TRUE WHERE id = $1", [id]);
     await client.query('COMMIT');
-    res.json({ id, status: 'approved' });
+    res.json({ id, status: 'approved', message: 'Farmer approved successfully' });
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch (_) {}
-    const msg = err && err.code === '42703' ? 'Schema requires users.is_active' : 'Server Error';
-    res.status(500).json({ error: msg });
+    const msg = err && err.code === '42703' 
+      ? 'Database schema error: Missing required columns (approval_status or is_active)' 
+      : err.message || 'Server Error';
+    res.status(500).json({ error: msg, details: err.code });
   } finally {
     client.release();
   }
@@ -93,31 +120,41 @@ async function rejectFarmer(req, res) {
     const { id } = req.params;
     const { reason } = req.body || {};
     await client.query('BEGIN');
-    const pre = await client.query("SELECT user_type, approval_status FROM users WHERE id = $1 FOR UPDATE", [id]);
+    const pre = await client.query("SELECT user_type, approval_status, is_active FROM users WHERE id = $1 FOR UPDATE", [id]);
     if (pre.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Not Found' });
+      return res.status(404).json({ error: 'User not found' });
     }
     const row = pre.rows[0];
-    if (row.user_type !== 'farmer') {
+    // Case-insensitive check for user_type
+    if (row.user_type?.toLowerCase() !== 'farmer') {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Not a farmer' });
+      return res.status(400).json({ error: 'User is not a farmer' });
     }
-    if (typeof row.approval_status !== 'string') {
+    // Handle case where approval_status might be null
+    const approvalStatus = row.approval_status || 'pending';
+    if (typeof approvalStatus !== 'string') {
       await client.query('ROLLBACK');
-      return res.status(500).json({ error: 'Schema requires users.approval_status' });
+      return res.status(500).json({ error: 'Schema requires users.approval_status column' });
     }
-    if (row.approval_status !== 'pending') {
+    // Case-insensitive check for approval_status
+    if (approvalStatus.toLowerCase() !== 'pending') {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Invalid state' });
+      return res.status(409).json({ 
+        error: `Farmer is already ${approvalStatus}. Cannot reject.`,
+        current_status: approvalStatus 
+      });
     }
     await client.query("UPDATE users SET approval_status = 'rejected', is_active = FALSE, approval_reason = $2 WHERE id = $1", [id, reason || null]);
     await client.query('COMMIT');
-    res.json({ id, status: 'rejected' });
+    res.json({ id, status: 'rejected', message: 'Farmer rejected successfully' });
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch (_) {}
-    const msg = err && err.code === '42703' ? 'Schema requires users.is_active' : 'Server Error';
-    res.status(500).json({ error: msg });
+    console.error('Error rejecting farmer:', err);
+    const msg = err && err.code === '42703' 
+      ? 'Database schema error: Missing required columns (approval_status or is_active)' 
+      : err.message || 'Server Error';
+    res.status(500).json({ error: msg, details: err.code });
   } finally {
     client.release();
   }

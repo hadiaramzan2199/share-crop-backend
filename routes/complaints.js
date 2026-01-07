@@ -15,7 +15,7 @@ const pool = require('../db');
  */
 router.post('/', async (req, res) => {
   try {
-    const { created_by, target_type, target_id, category, description } = req.body;
+    const { created_by, target_type, target_id, category, description, complained_against_user_id } = req.body;
 
     // Validation
     if (!created_by) {
@@ -41,6 +41,17 @@ router.post('/', async (req, res) => {
     const userCheck = await pool.query('SELECT id, user_type FROM users WHERE id = $1', [created_by]);
     if (userCheck.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Validate complained_against_user_id if provided
+    if (complained_against_user_id) {
+      if (complained_against_user_id === created_by) {
+        return res.status(400).json({ error: 'You cannot complain against yourself' });
+      }
+      const complainedUserCheck = await pool.query('SELECT id FROM users WHERE id = $1', [complained_against_user_id]);
+      if (complainedUserCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'User to complain against not found' });
+      }
     }
 
     // Target types that require target_id
@@ -78,10 +89,10 @@ router.post('/', async (req, res) => {
 
     // Insert complaint
     const result = await pool.query(
-      `INSERT INTO complaints (created_by, target_type, target_id, category, description, status)
-       VALUES ($1, $2, $3, $4, $5, 'open')
+      `INSERT INTO complaints (created_by, target_type, target_id, category, description, status, complained_against_user_id)
+       VALUES ($1, $2, $3, $4, $5, 'open', $6)
        RETURNING *`,
-      [created_by, normalizedTargetType, finalTargetId, category || null, description.trim()]
+      [created_by, normalizedTargetType, finalTargetId, category || null, description.trim(), complained_against_user_id || null]
     );
 
     const complaint = result.rows[0];
@@ -97,6 +108,7 @@ router.post('/', async (req, res) => {
       category: complaint.category,
       description: complaint.description,
       status: complaint.status,
+      complained_against_user_id: complaint.complained_against_user_id,
       created_at: complaint.created_at,
       updated_at: complaint.updated_at,
       message: 'Complaint submitted successfully'
@@ -117,7 +129,7 @@ router.post('/', async (req, res) => {
  */
 router.get('/', async (req, res) => {
   try {
-    const { status, user_id } = req.query;
+    const { status, user_id, complained_against_user_id } = req.query;
     let query = `
       SELECT 
         c.id,
@@ -131,10 +143,15 @@ router.get('/', async (req, res) => {
         c.description,
         c.status,
         c.admin_remarks,
+        c.complained_against_user_id,
+        complained_user.name AS complained_against_user_name,
+        complained_user.email AS complained_against_user_email,
+        complained_user.user_type AS complained_against_user_type,
         c.created_at,
         c.updated_at
       FROM complaints c
       LEFT JOIN users u ON u.id = c.created_by
+      LEFT JOIN users complained_user ON complained_user.id = c.complained_against_user_id
       WHERE 1=1
     `;
     const params = [];
@@ -144,6 +161,12 @@ router.get('/', async (req, res) => {
       paramCount++;
       query += ` AND c.created_by = $${paramCount}`;
       params.push(user_id);
+    }
+
+    if (complained_against_user_id) {
+      paramCount++;
+      query += ` AND c.complained_against_user_id = $${paramCount}`;
+      params.push(complained_against_user_id);
     }
 
     if (status) {
@@ -182,10 +205,15 @@ router.get('/:id', async (req, res) => {
         c.description,
         c.status,
         c.admin_remarks,
+        c.complained_against_user_id,
+        complained_user.name AS complained_against_user_name,
+        complained_user.email AS complained_against_user_email,
+        complained_user.user_type AS complained_against_user_type,
         c.created_at,
         c.updated_at
       FROM complaints c
       LEFT JOIN users u ON u.id = c.created_by
+      LEFT JOIN users complained_user ON complained_user.id = c.complained_against_user_id
       WHERE c.id = $1`,
       [id]
     );

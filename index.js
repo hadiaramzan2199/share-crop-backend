@@ -41,11 +41,12 @@ const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
 app.use(cors({
   origin: allowedOrigin,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: false,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
-// Handle preflight
-// Preflight handled by cors middleware; no explicit wildcard route needed
+
 app.use(express.json()); // Add this line to parse JSON request bodies
 app.use(attachUser);
 app.use('/api/users', usersRoutes);

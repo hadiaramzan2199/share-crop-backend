@@ -97,6 +97,30 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get user names only (for security - no sensitive data)
+// This endpoint returns only: id, name, user_type
+// Must be defined BEFORE /:id route to avoid route conflicts
+router.get('/names', async (req, res) => {
+  try {
+    const { search } = req.query;
+    let query = 'SELECT id, name, user_type FROM users';
+    const params = [];
+    
+    if (search && search.trim().length >= 2) {
+      query += ' WHERE name ILIKE $1';
+      params.push(`%${search.trim()}%`);
+    }
+    
+    query += ' ORDER BY name ASC LIMIT 50'; // Limit results for performance
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching user names:', err.message);
+    res.status(500).json({ error: 'Failed to fetch user names' });
+  }
+});
+
 // Get a single user by ID
 router.get('/:id', async (req, res) => {
   try {
