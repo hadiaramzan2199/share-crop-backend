@@ -9,6 +9,8 @@ const authRoutes = require('./routes/auth'); // Import auth routes
 const notificationsRoutes = require('./routes/notifications'); // Import notifications routes
 const ordersRoutes = require('./routes/orders'); // Import orders routes
 const coinsRoutes = require('./routes/coins'); // Import coins routes
+const complaintsRoutes = require('./routes/complaints'); // Import complaints routes
+const transactionsRoutes = require('./routes/transactions'); // Import transactions routes
 const adminRouter = require('./src/modules/admin/routes/admin.routes');
 const attachUser = require('./src/middleware/auth/attachUser');
 const pool = require('./db');
@@ -39,11 +41,12 @@ const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
 app.use(cors({
   origin: allowedOrigin,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: false,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
-// Handle preflight
-// Preflight handled by cors middleware; no explicit wildcard route needed
+
 app.use(express.json()); // Add this line to parse JSON request bodies
 app.use(attachUser);
 app.use('/api/users', usersRoutes);
@@ -54,6 +57,8 @@ app.use('/api/auth', authRoutes); // Use auth routes
 app.use('/api/notifications', notificationsRoutes); // Use notifications routes
 app.use('/api/orders', ordersRoutes); // Use orders routes
 app.use('/api/coins', coinsRoutes); // Use coins routes
+app.use('/api/complaints', complaintsRoutes); // Use complaints routes
+app.use('/api/transactions', transactionsRoutes); // Use transactions routes
 app.use('/api/admin', adminRouter);
 
 // Database health check endpoint

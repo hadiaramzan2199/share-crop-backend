@@ -7,7 +7,15 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
     "seed:dashboard": "node scripts/seed_dashboard_data.js",
-    "migrate:complaints:category": "node runComplaintsAddCategory.js"
+    "migrate:complaints:category": "node runComplaintsAddCategory.js",
+    "migrate:auth": "node runAuthMigration.js",
+    "migrate:auth:check": "node checkBeforeMigration.js",
+    "migrate:auth:rollback": "node runAuthRollback.js",
+    "migrate:auth:fix": "node fixUserTypes.js",
+    "migrate:auth:check-detail": "node checkUserTypesDetailed.js",
+    "create:admin": "node createAdminUser.js",
+    "reset:password": "node resetUserPasswords.js",
+    "reset:default-passwords": "node resetDefaultPasswords.js"
   },
   "keywords": [],
   "author": "",
@@ -16,9 +24,11 @@
     "@fortawesome/free-solid-svg-icons": "^7.0.1",
     "@fortawesome/react-fontawesome": "^3.0.2",
     "@supabase/supabase-js": "^2.86.0",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.3",
     "pg": "^8.16.3"
   }
 }

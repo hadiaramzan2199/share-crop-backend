@@ -2,14 +2,122 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db'); // Assuming db.js is in the parent directory
 
-// Get all users
+// Get all users with enhanced stats
 router.get('/', async (req, res) => {
   try {
-    const allUsers = await pool.query('SELECT * FROM users');
-    res.json(allUsers.rows);
+    const { includeStats } = req.query; // Optional query param to include stats
+    
+    if (includeStats === 'true') {
+      // Enhanced query with statistics
+      const sql = `
+        SELECT 
+          u.id,
+          u.email,
+          u.name,
+          u.user_type,
+          u.coins,
+          u.created_at,
+          u.is_active,
+          u.approval_status,
+          u.approval_reason,
+          u.documents_json,
+          -- Farmer stats
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COUNT(*)::int FROM fields f WHERE f.owner_id = u.id
+            )
+            ELSE NULL
+          END AS fields_count,
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COUNT(*)::int FROM farms fm WHERE fm.owner_id = u.id
+            )
+            ELSE NULL
+          END AS farms_count,
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COUNT(*)::int 
+              FROM orders o 
+              JOIN fields f ON f.id = o.field_id 
+              WHERE f.owner_id = u.id
+            )
+            ELSE NULL
+          END AS orders_received,
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COALESCE(SUM(o.total_price), 0)::float
+              FROM orders o 
+              JOIN fields f ON f.id = o.field_id 
+              WHERE f.owner_id = u.id
+            )
+            ELSE NULL
+          END AS total_revenue,
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COALESCE(AVG(f.rating), 0)::float
+              FROM fields f 
+              WHERE f.owner_id = u.id
+            )
+            ELSE NULL
+          END AS avg_rating,
+          -- Buyer stats
+          CASE 
+            WHEN u.user_type = 'buyer' THEN (
+              SELECT COUNT(*)::int FROM orders o WHERE o.buyer_id = u.id
+            )
+            ELSE NULL
+          END AS orders_placed,
+          CASE 
+            WHEN u.user_type = 'buyer' THEN (
+              SELECT COALESCE(SUM(o.total_price), 0)::float
+              FROM orders o 
+              WHERE o.buyer_id = u.id
+            )
+            ELSE NULL
+          END AS total_spent
+        FROM users u
+        ORDER BY u.created_at DESC
+      `;
+      const result = await pool.query(sql);
+      res.json(result.rows);
+    } else {
+      // Basic query without password
+      const allUsers = await pool.query(`
+        SELECT 
+          id, email, name, user_type, coins, created_at, 
+          is_active, approval_status, approval_reason, documents_json
+        FROM users
+        ORDER BY created_at DESC
+      `);
+      res.json(allUsers.rows);
+    }
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
+  }
+});
+
+// Get user names only (for security - no sensitive data)
+// This endpoint returns only: id, name, user_type
+// Must be defined BEFORE /:id route to avoid route conflicts
+router.get('/names', async (req, res) => {
+  try {
+    const { search } = req.query;
+    let query = 'SELECT id, name, user_type FROM users';
+    const params = [];
+    
+    if (search && search.trim().length >= 2) {
+      query += ' WHERE name ILIKE $1';
+      params.push(`%${search.trim()}%`);
+    }
+    
+    query += ' ORDER BY name ASC LIMIT 50'; // Limit results for performance
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching user names:', err.message);
+    res.status(500).json({ error: 'Failed to fetch user names' });
   }
 });
 

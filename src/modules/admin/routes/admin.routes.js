@@ -17,8 +17,8 @@ router.use(requireRole('ADMIN'));
 router.get('/users/overview', require('../controllers/adminUserController').getUsersOverview);
 router.get('/farmers/pending', require('../controllers/adminUserController').listPendingFarmers);
 router.get('/farmers/:id/documents', require('../controllers/adminUserController').getFarmerDocuments);
-router.patch('/farmers/:id/approve', require('../controllers/adminUserController').approveFarmer);
-router.patch('/farmers/:id/reject', require('../controllers/adminUserController').rejectFarmer);
+router.post('/farmers/:id/approve', require('../controllers/adminUserController').approveFarmer);
+router.post('/farmers/:id/reject', require('../controllers/adminUserController').rejectFarmer);
 
 router.get('/production/consistency', adminMonitoringController.getProductionConsistency);
 router.get('/qa/complaints', adminQAController.listComplaints);
