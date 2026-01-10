@@ -44,7 +44,7 @@ function isValidPassword(password) {
  */
 router.post('/signup', async (req, res) => {
   try {
-    const { name, email, password, user_type } = req.body;
+    const { name, email, password, user_type, profile_image_url, documents } = req.body;
 
     // Validation
     if (!name || name.trim().length === 0) {
@@ -88,8 +88,8 @@ router.post('/signup', async (req, res) => {
 
     // Create user (using PostgreSQL's gen_random_uuid())
     const result = await pool.query(
-      `INSERT INTO users (id, name, email, password, user_type, email_verified, is_active, created_at)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW())
+      `INSERT INTO users (id, name, email, password, user_type, email_verified, is_active, created_at, profile_image_url)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW(), $7)
        RETURNING id, name, email, user_type, created_at, email_verified, is_active, profile_image_url`,
       [
         name.trim(),
@@ -98,10 +98,23 @@ router.post('/signup', async (req, res) => {
         normalizedUserType,
         false, // email_verified (skip for now)
         true,  // is_active
+        profile_image_url || null
       ]
     );
 
     const newUser = result.rows[0];
+
+    // Handle documents if provided (only for farmers usually, but API can be flexible)
+    if (documents && Array.isArray(documents) && documents.length > 0) {
+      for (const doc of documents) {
+        if (doc.file_name && doc.file_url) {
+          await pool.query(
+            'INSERT INTO user_documents (user_id, file_name, file_url, file_type) VALUES ($1, $2, $3, $4)',
+            [newUser.id, doc.file_name, doc.file_url, doc.file_type || 'other']
+          );
+        }
+      }
+    }
 
     // Generate JWT token
     const token = generateToken(newUser);
