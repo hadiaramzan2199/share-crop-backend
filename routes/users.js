@@ -106,7 +106,7 @@ router.get('/', async (req, res) => {
 router.get('/names', async (req, res) => {
   try {
     const { search } = req.query;
-    let query = 'SELECT id, name, user_type FROM users';
+    let query = 'SELECT id, name, user_type, profile_image_url FROM users';
     const params = [];
 
     if (search && search.trim().length >= 2) {

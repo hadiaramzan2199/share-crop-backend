@@ -12,6 +12,8 @@ const coinsRoutes = require('./routes/coins'); // Import coins routes
 const complaintsRoutes = require('./routes/complaints'); // Import complaints routes
 const transactionsRoutes = require('./routes/transactions'); // Import transactions routes
 const userDocumentsRoutes = require('./routes/userDocuments'); // Import user documents routes
+const conversationsRoutes = require('./routes/conversations');
+const messagesRoutes = require('./routes/messages');
 const adminRouter = require('./src/modules/admin/routes/admin.routes');
 const attachUser = require('./src/middleware/auth/attachUser');
 const pool = require('./db');
@@ -61,6 +63,8 @@ app.use('/api/coins', coinsRoutes); // Use coins routes
 app.use('/api/complaints', complaintsRoutes); // Use complaints routes
 app.use('/api/transactions', transactionsRoutes); // Use transactions routes
 app.use('/api/user-documents', userDocumentsRoutes); // Use user documents routes
+app.use('/api/conversations', conversationsRoutes);
+app.use('/api/messages', messagesRoutes);
 app.use('/api/admin', adminRouter);
 
 // Database health check endpoint
