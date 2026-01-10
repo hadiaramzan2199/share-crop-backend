@@ -21,6 +21,8 @@ router.get('/', async (req, res) => {
           u.approval_status,
           u.approval_reason,
           u.documents_json,
+          u.profile_image_url,
+          (SELECT json_agg(d.*) FROM user_documents d WHERE d.user_id = u.id) as uploaded_documents,
           -- Farmer stats
           CASE 
             WHEN u.user_type = 'farmer' THEN (
@@ -85,7 +87,8 @@ router.get('/', async (req, res) => {
       const allUsers = await pool.query(`
         SELECT 
           id, email, name, user_type, coins, created_at, 
-          is_active, approval_status, approval_reason, documents_json
+          is_active, approval_status, approval_reason, documents_json, profile_image_url,
+          (SELECT json_agg(d.*) FROM user_documents d WHERE d.user_id = id) as uploaded_documents
         FROM users
         ORDER BY created_at DESC
       `);
@@ -152,6 +155,8 @@ router.get('/:id/stats', async (req, res) => {
           u.approval_status,
           u.approval_reason,
           u.documents_json,
+          u.profile_image_url,
+          (SELECT json_agg(d.*) FROM user_documents d WHERE d.user_id = u.id) as uploaded_documents,
           -- Farmer stats
           CASE 
             WHEN u.user_type = 'farmer' THEN (
@@ -271,6 +276,25 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json('User not found');
     }
     res.json(updateUser.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Update a user's profile image
+router.patch('/:id/profile-image', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { profile_image_url } = req.body;
+    const result = await pool.query(
+      'UPDATE users SET profile_image_url = $1 WHERE id = $2 RETURNING *',
+      [profile_image_url, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json('User not found');
+    }
+    res.json(result.rows[0]);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');

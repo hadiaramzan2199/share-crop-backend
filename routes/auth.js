@@ -90,7 +90,7 @@ router.post('/signup', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (id, name, email, password, user_type, email_verified, is_active, created_at)
        VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW())
-       RETURNING id, name, email, user_type, created_at, email_verified, is_active`,
+       RETURNING id, name, email, user_type, created_at, email_verified, is_active, profile_image_url`,
       [
         name.trim(),
         email.toLowerCase().trim(),
@@ -118,17 +118,18 @@ router.post('/signup', async (req, res) => {
         user_type: newUser.user_type,
         email_verified: newUser.email_verified,
         is_active: newUser.is_active,
+        profile_image_url: newUser.profile_image_url,
       },
       token,
     });
   } catch (err) {
     console.error('Signup error:', err.message);
-    
+
     // Handle unique constraint violation
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Email already registered' });
     }
-    
+
     res.status(500).json({ error: 'Server Error', details: err.message });
   }
 });
@@ -181,14 +182,14 @@ router.post('/login', async (req, res) => {
 
     // Check password (handle both hashed and plain text for migration)
     let passwordValid = false;
-    
+
     // Try bcrypt comparison first (for new hashed passwords)
     if (user.password.startsWith('$2')) {
       passwordValid = await bcrypt.compare(password, user.password);
     } else {
       // Fallback for old plain text passwords (during migration)
       passwordValid = user.password === password;
-      
+
       // If login successful with plain text, hash it for next time
       if (passwordValid) {
         const hashedPassword = await bcrypt.hash(password, 12);
@@ -200,7 +201,7 @@ router.post('/login', async (req, res) => {
       // Increment login attempts
       const newAttempts = (user.login_attempts || 0) + 1;
       const maxAttempts = 5;
-      
+
       if (newAttempts >= maxAttempts) {
         // Lock account for 15 minutes
         const lockUntil = new Date(Date.now() + 15 * 60 * 1000);
@@ -239,6 +240,7 @@ router.post('/login', async (req, res) => {
         email_verified: user.email_verified || false,
         is_active: user.is_active,
         coins: user.coins || 0,
+        profile_image_url: user.profile_image_url,
       },
       token,
     });
@@ -262,7 +264,7 @@ router.get('/me', async (req, res) => {
 
     // Fetch fresh user data from database
     const userResult = await pool.query(
-      'SELECT id, name, email, user_type, email_verified, is_active, coins, created_at, last_login FROM users WHERE id = $1',
+      'SELECT id, name, email, user_type, email_verified, is_active, coins, created_at, last_login, profile_image_url, (SELECT json_agg(d.*) FROM user_documents d WHERE d.user_id = id) as uploaded_documents FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -283,6 +285,8 @@ router.get('/me', async (req, res) => {
         coins: user.coins || 0,
         created_at: user.created_at,
         last_login: user.last_login,
+        profile_image_url: user.profile_image_url,
+        uploaded_documents: user.uploaded_documents || [],
       },
     });
   } catch (err) {
@@ -356,9 +360,9 @@ router.put('/profile', async (req, res) => {
       UPDATE users 
       SET ${updates.join(', ')} 
       WHERE id = $${paramCount}
-      RETURNING id, name, email, user_type, email_verified, is_active, coins, created_at, updated_at
+      RETURNING id, name, email, user_type, email_verified, is_active, coins, created_at, updated_at, profile_image_url
     `;
-    
+
     const result = await pool.query(updateQuery, values);
 
     if (result.rows.length === 0) {
@@ -379,6 +383,7 @@ router.put('/profile', async (req, res) => {
         coins: updatedUser.coins || 0,
         created_at: updatedUser.created_at,
         updated_at: updatedUser.updated_at,
+        profile_image_url: updatedUser.profile_image_url,
       },
     });
   } catch (err) {
