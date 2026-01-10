@@ -10,21 +10,6 @@ try {
 
 module.exports = async function attachUser(req, res, next) {
   try {
-    const authDisabled =
-      process.env.AUTH_DISABLED === 'true' ||
-      process.env.DISABLE_AUTH === 'true' ||
-      process.env.APP_AUTH_DISABLED === 'true';
-
-    if (authDisabled) {
-      req.user = {
-        id: 'mvp-admin',
-        email: 'admin@example.com',
-        user_type: 'ADMIN',
-        is_active: true,
-      };
-      return next();
-    }
-
     if (!jwt) {
       req.user = null;
       return next();

@@ -1,14 +1,5 @@
 module.exports = function requireRole(requiredRole) {
   return function (req, res, next) {
-    const authDisabled =
-      process.env.AUTH_DISABLED === 'true' ||
-      process.env.DISABLE_AUTH === 'true' ||
-      process.env.APP_AUTH_DISABLED === 'true';
-
-    if (authDisabled) {
-      return next();
-    }
-
     const user = req.user;
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' });
