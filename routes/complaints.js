@@ -32,8 +32,8 @@ router.post('/', async (req, res) => {
     const validTargetTypes = ['field', 'order', 'user', 'payment', 'delivery', 'service', 'quality', 'refund'];
     const normalizedTargetType = target_type.toLowerCase();
     if (!validTargetTypes.includes(normalizedTargetType)) {
-      return res.status(400).json({ 
-        error: `Invalid target_type. Must be one of: ${validTargetTypes.join(', ')}` 
+      return res.status(400).json({
+        error: `Invalid target_type. Must be one of: ${validTargetTypes.join(', ')}`
       });
     }
 
@@ -56,7 +56,7 @@ router.post('/', async (req, res) => {
 
     // Target types that require target_id
     const requiresTargetId = ['field', 'order', 'user'];
-    
+
     // For types that require target_id, validate it exists
     if (requiresTargetId.includes(normalizedTargetType)) {
       if (!target_id || target_id.trim() === '') {
@@ -80,11 +80,11 @@ router.post('/', async (req, res) => {
         return res.status(404).json({ error: `Target ${target_type} with id ${target_id} not found` });
       }
     }
-    
+
     // For general complaint types (service, quality, refund, etc.), target_id is optional
     // Use a placeholder UUID if not provided
-    const finalTargetId = target_id && target_id.trim() !== '' 
-      ? target_id 
+    const finalTargetId = target_id && target_id.trim() !== ''
+      ? target_id
       : '00000000-0000-0000-0000-000000000000'; // Placeholder UUID for general complaints
 
     // Insert complaint
@@ -143,15 +143,31 @@ router.get('/', async (req, res) => {
         c.description,
         c.status,
         c.admin_remarks,
-        c.complained_against_user_id,
+        COALESCE(c.complained_against_user_id, 
+          CASE 
+            WHEN c.target_type = 'user' THEN (SELECT id FROM users WHERE id = c.target_id)
+            WHEN c.target_type = 'field' THEN (SELECT owner_id FROM fields WHERE id = c.target_id)
+            WHEN c.target_type = 'order' THEN (SELECT f.owner_id FROM fields f JOIN orders o ON o.field_id = f.id WHERE o.id = c.target_id)
+            ELSE NULL
+          END
+        ) AS complained_against_user_id,
+        c.created_at,
+        c.updated_at,
         complained_user.name AS complained_against_user_name,
         complained_user.email AS complained_against_user_email,
-        complained_user.user_type AS complained_against_user_type,
-        c.created_at,
-        c.updated_at
+        complained_user.user_type AS complained_against_user_type
       FROM complaints c
       LEFT JOIN users u ON u.id = c.created_by
-      LEFT JOIN users complained_user ON complained_user.id = c.complained_against_user_id
+      LEFT JOIN users complained_user ON complained_user.id = (
+        COALESCE(c.complained_against_user_id, 
+          CASE 
+            WHEN c.target_type = 'user' THEN (SELECT id FROM users WHERE id = c.target_id)
+            WHEN c.target_type = 'field' THEN (SELECT owner_id FROM fields WHERE id = c.target_id)
+            WHEN c.target_type = 'order' THEN (SELECT f.owner_id FROM fields f JOIN orders o ON o.field_id = f.id WHERE o.id = c.target_id)
+            ELSE NULL
+          END
+        )
+      )
       WHERE 1=1
     `;
     const params = [];
@@ -205,15 +221,31 @@ router.get('/:id', async (req, res) => {
         c.description,
         c.status,
         c.admin_remarks,
-        c.complained_against_user_id,
+        COALESCE(c.complained_against_user_id, 
+          CASE 
+            WHEN c.target_type = 'user' THEN (SELECT id FROM users WHERE id = c.target_id)
+            WHEN c.target_type = 'field' THEN (SELECT owner_id FROM fields WHERE id = c.target_id)
+            WHEN c.target_type = 'order' THEN (SELECT f.owner_id FROM fields f JOIN orders o ON o.field_id = f.id WHERE o.id = c.target_id)
+            ELSE NULL
+          END
+        ) AS complained_against_user_id,
+        c.created_at,
+        c.updated_at,
         complained_user.name AS complained_against_user_name,
         complained_user.email AS complained_against_user_email,
-        complained_user.user_type AS complained_against_user_type,
-        c.created_at,
-        c.updated_at
+        complained_user.user_type AS complained_against_user_type
       FROM complaints c
       LEFT JOIN users u ON u.id = c.created_by
-      LEFT JOIN users complained_user ON complained_user.id = c.complained_against_user_id
+      LEFT JOIN users complained_user ON complained_user.id = (
+        COALESCE(c.complained_against_user_id, 
+          CASE 
+            WHEN c.target_type = 'user' THEN (SELECT id FROM users WHERE id = c.target_id)
+            WHEN c.target_type = 'field' THEN (SELECT owner_id FROM fields WHERE id = c.target_id)
+            WHEN c.target_type = 'order' THEN (SELECT f.owner_id FROM fields f JOIN orders o ON o.field_id = f.id WHERE o.id = c.target_id)
+            ELSE NULL
+          END
+        )
+      )
       WHERE c.id = $1`,
       [id]
     );

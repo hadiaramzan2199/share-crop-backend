@@ -6,7 +6,7 @@ const pool = require('../db'); // Assuming db.js is in the parent directory
 router.get('/', async (req, res) => {
   try {
     const { includeStats } = req.query; // Optional query param to include stats
-    
+
     if (includeStats === 'true') {
       // Enhanced query with statistics
       const sql = `
@@ -105,14 +105,14 @@ router.get('/names', async (req, res) => {
     const { search } = req.query;
     let query = 'SELECT id, name, user_type FROM users';
     const params = [];
-    
+
     if (search && search.trim().length >= 2) {
       query += ' WHERE name ILIKE $1';
       params.push(`%${search.trim()}%`);
     }
-    
+
     query += ' ORDER BY name ASC LIMIT 50'; // Limit results for performance
-    
+
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
@@ -130,6 +130,90 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json('User not found');
     }
     res.json(user.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Get a single user by ID with stats
+router.get('/:id/stats', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const sql = `
+        SELECT 
+          u.id,
+          u.email,
+          u.name,
+          u.user_type,
+          u.coins,
+          u.created_at,
+          u.is_active,
+          u.approval_status,
+          u.approval_reason,
+          u.documents_json,
+          -- Farmer stats
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COUNT(*)::int FROM fields f WHERE f.owner_id = u.id
+            )
+            ELSE NULL
+          END AS fields_count,
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COUNT(*)::int FROM farms fm WHERE fm.owner_id = u.id
+            )
+            ELSE NULL
+          END AS farms_count,
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COUNT(*)::int 
+              FROM orders o 
+              JOIN fields f ON f.id = o.field_id 
+              WHERE f.owner_id = u.id
+            )
+            ELSE NULL
+          END AS orders_received,
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COALESCE(SUM(o.total_price), 0)::float
+              FROM orders o 
+              JOIN fields f ON f.id = o.field_id 
+              WHERE f.owner_id = u.id
+            )
+            ELSE NULL
+          END AS total_revenue,
+          CASE 
+            WHEN u.user_type = 'farmer' THEN (
+              SELECT COALESCE(AVG(f.rating), 0)::float
+              FROM fields f 
+              WHERE f.owner_id = u.id
+            )
+            ELSE NULL
+          END AS avg_rating,
+          -- Buyer stats
+          CASE 
+            WHEN u.user_type = 'buyer' THEN (
+              SELECT COUNT(*)::int FROM orders o WHERE o.buyer_id = u.id
+            )
+            ELSE NULL
+          END AS orders_placed,
+          CASE 
+            WHEN u.user_type = 'buyer' THEN (
+              SELECT COALESCE(SUM(o.total_price), 0)::float
+              FROM orders o 
+              WHERE o.buyer_id = u.id
+            )
+            ELSE NULL
+          END AS total_spent
+        FROM users u
+        WHERE u.id = $1
+      `;
+    const result = await pool.query(sql, [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json('User not found');
+    }
+    res.json(result.rows[0]);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
